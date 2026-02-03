@@ -1,0 +1,259 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Device Model
+model Device {
+  id                      String        @id @default(cuid())
+  deviceId                String        @unique
+  name                    String?
+  accountAssociatedSince  Int?
+  mainDevice              Boolean       @default(false)
+  prosumer                Boolean       @default(false)
+  division                Int           @default(0) // Divisions enum as Int
+  
+  currentData             CurrentData[]
+  operatingReports        OperatingReport[]
+  reports                 Report[]
+  
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  
+  @@index([deviceId])
+}
+
+// Current Data Model - Aktuelle Messwerte
+model CurrentData {
+  id                  String    @id @default(cuid())
+  deviceId            String
+  device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  outdated            Boolean   @default(false)
+  watt                Float?
+  kiloWattHour        Float?
+  deltaKiloWattHour   Float?
+  cubicMeterCold      Float?
+  cubicMeterWarm      Float?
+  cubicMeter          Float?
+  deltaCubicMeter     Float?
+  timestamp           Int?
+  aPlus               Float?
+  aPlusHT             Float?
+  aPlusNT             Float?
+  aMinus              Float?
+  l1                  Float?
+  l2                  Float?
+  l3                  Float?
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@index([deviceId])
+  @@index([timestamp])
+}
+
+// Operating Report Model - Betriebsberichte
+model OperatingReport {
+  id                  String                    @id @default(cuid())
+  deviceId            String
+  device              Device                    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  max                 Float?
+  min                 Float?
+  avg                 Float?
+  
+  values              OperatingReportValue[]    @relation("ReportValues")
+  valuesPlus          OperatingReportValue[]    @relation("ReportValuesPlus")
+  valuesMinus         OperatingReportValue[]    @relation("ReportValuesMinus")
+  
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  
+  @@index([deviceId])
+}
+
+// Operating Report Value Model - Einzelne Messwerte im Betriebsbericht
+model OperatingReportValue {
+  id                      String            @id @default(cuid())
+  timestamp               Int?
+  value                   Float?
+  
+  operatingReportId       String?
+  operatingReport         OperatingReport?  @relation("ReportValues", fields: [operatingReportId], references: [id], onDelete: Cascade)
+  
+  operatingReportPlusId   String?
+  operatingReportPlus     OperatingReport?  @relation("ReportValuesPlus", fields: [operatingReportPlusId], references: [id], onDelete: Cascade)
+  
+  operatingReportMinusId  String?
+  operatingReportMinus    OperatingReport?  @relation("ReportValuesMinus", fields: [operatingReportMinusId], references: [id], onDelete: Cascade)
+  
+  createdAt               DateTime          @default(now())
+  
+  @@index([timestamp])
+}
+
+// Report Model - Hauptbericht mit verschiedenen Zusammenfassungen
+model Report {
+  id                  String                @id @default(cuid())
+  deviceId            String
+  device              Device                @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  consumption         ReportSummaryPower?   @relation("Consumption")
+  ownConsumption      ReportSummaryPower?   @relation("OwnConsumption")
+  feedIn              ReportSummaryPower?   @relation("FeedIn")
+  generation          ReportSummaryPower?   @relation("Generation")
+  heat                ReportSummaryHeat?
+  gas                 ReportSummaryGas?
+  water               ReportSummaryWater?
+  
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  
+  @@index([deviceId])
+}
+
+// Report Summary Power - Strom-Zusammenfassung
+model ReportSummaryPower {
+  id                      String                @id @default(cuid())
+  reportId                String                @unique
+  summaryType             String                // "consumption", "ownConsumption", "feedIn", "generation"
+  
+  sumCurrency             Float?
+  startTime               Int?
+  startTimeCurrency       Float?
+  sum                     Float?
+  max                     Float?
+  maxCurrency             Float?
+  
+  reportConsumption       Report?               @relation("Consumption", fields: [reportId], references: [id], onDelete: Cascade)
+  reportOwnConsumption    Report?               @relation("OwnConsumption", fields: [reportId], references: [id], onDelete: Cascade)
+  reportFeedIn            Report?               @relation("FeedIn", fields: [reportId], references: [id], onDelete: Cascade)
+  reportGeneration        Report?               @relation("Generation", fields: [reportId], references: [id], onDelete: Cascade)
+  
+  meterReadings           ReportMeterReading[]
+  reportValues            ReportValue[]
+  
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  
+  @@index([reportId])
+}
+
+// Report Summary Heat - Wärme-Zusammenfassung
+model ReportSummaryHeat {
+  id                      String                @id @default(cuid())
+  reportId                String                @unique
+  report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  sumCurrency             Float?
+  startTime               Int?
+  startTimeCurrency       Float?
+  sum                     Float?
+  max                     Float?
+  maxCurrency             Float?
+  
+  meterReadings           ReportMeterReading[]
+  reportValues            ReportValue[]
+  
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  
+  @@index([reportId])
+}
+
+// Report Summary Gas - Gas-Zusammenfassung
+model ReportSummaryGas {
+  id                      String                @id @default(cuid())
+  reportId                String                @unique
+  report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  sumCurrency             Float?
+  startTime               Int?
+  startTimeCurrency       Float?
+  sum                     Float?
+  max                     Float?
+  maxCurrency             Float?
+  
+  meterReadings           ReportMeterReading[]
+  reportValues            ReportValue[]
+  
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  
+  @@index([reportId])
+}
+
+// Report Summary Water - Wasser-Zusammenfassung
+model ReportSummaryWater {
+  id                      String                @id @default(cuid())
+  reportId                String                @unique
+  report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  sumCurrency             Float?
+  startTime               Int?
+  startTimeCurrency       Float?
+  sum                     Float?
+  max                     Float?
+  maxCurrency             Float?
+  
+  meterReadings           ReportMeterReading[]
+  reportValues            ReportValue[]
+  
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  
+  @@index([reportId])
+}
+
+// Report Meter Reading - Zählerstände
+model ReportMeterReading {
+  id                      String                @id @default(cuid())
+  value                   Float?
+  type                    Int?                  // MeterReadingType enum as Int
+  
+  reportSummaryPowerId    String?
+  reportSummaryPower      ReportSummaryPower?   @relation(fields: [reportSummaryPowerId], references: [id], onDelete: Cascade)
+  
+  reportSummaryHeatId     String?
+  reportSummaryHeat       ReportSummaryHeat?    @relation(fields: [reportSummaryHeatId], references: [id], onDelete: Cascade)
+  
+  reportSummaryGasId      String?
+  reportSummaryGas        ReportSummaryGas?     @relation(fields: [reportSummaryGasId], references: [id], onDelete: Cascade)
+  
+  reportSummaryWaterId    String?
+  reportSummaryWater      ReportSummaryWater?   @relation(fields: [reportSummaryWaterId], references: [id], onDelete: Cascade)
+  
+  createdAt               DateTime              @default(now())
+}
+
+// Report Value - Berichtswerte
+model ReportValue {
+  id                      String                @id @default(cuid())
+  timestamp               Int?
+  value                   Float?
+  type                    Int?                  // ValuesType enum as Int
+  
+  reportSummaryPowerId    String?
+  reportSummaryPower      ReportSummaryPower?   @relation(fields: [reportSummaryPowerId], references: [id], onDelete: Cascade)
+  
+  reportSummaryHeatId     String?
+  reportSummaryHeat       ReportSummaryHeat?    @relation(fields: [reportSummaryHeatId], references: [id], onDelete: Cascade)
+  
+  reportSummaryGasId      String?
+  reportSummaryGas        ReportSummaryGas?     @relation(fields: [reportSummaryGasId], references: [id], onDelete: Cascade)
+  
+  reportSummaryWaterId    String?
+  reportSummaryWater      ReportSummaryWater?   @relation(fields: [reportSummaryWaterId], references: [id], onDelete: Cascade)
+  
+  createdAt               DateTime              @default(now())
+  
+  @@index([timestamp])
+}
