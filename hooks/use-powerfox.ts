@@ -2,13 +2,23 @@ import useSWR from "swr"
 import { usePowerfoxStore } from "@/lib/powerfox-store"
 
 /**
- * HYBRID-MODUS: Dashboard nutzt primär API (live), kann aber auf DB umgestellt werden
+ * HYBRID-MODUS:
+ * - Dashboard nutzt LIVE API-Daten (Echtzeit vom Main Device)
+ * - Reports-Seite nutzt DB-Daten (historische Analyse mit Filtern)
  * 
- * Um auf DB umzustellen:
- * 1. Ändere USE_DATABASE = true
- * 2. Stelle sicher dass Daten in DB sind (via /sync Seite)
+ * /sync Seite speichert Daten in DB für spätere Analyse
  */
-const USE_DATABASE = false // Auf true setzen für DB-Modus
+const USE_DATABASE = false // Dashboard zeigt Live-Daten von API
+
+/**
+ * API-Refresh-Intervalle (in Millisekunden)
+ */
+const REFRESH_INTERVALS = {
+  DEVICES: 60000,      // 1 Minute - Devices ändern sich selten
+  CURRENT: 60000,      // 1 Minute - Aktuelle Daten
+  OPERATING: 60000,    // 1 Minute - Operating Reports
+  REPORT: 300000,      // 5 Minuten - Reports ändern sich am seltensten
+}
 
 interface FetchParams {
   endpoint: string
@@ -48,6 +58,21 @@ async function dbFetcher(url: string) {
   return response.json()
 }
 
+// Speichert Devices im Hintergrund in der DB
+async function saveDevicesToDb(devices: any[]) {
+  try {
+    const body = JSON.stringify(devices)
+    const response = await fetch("/api/powerfox/save?endpoint=all/devices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body,
+    })
+    await response.json()
+  } catch {
+    // Fehler wird ignoriert - DB-Speicherung ist optional
+  }
+}
+
 export function useDevices() {
   const credentials = usePowerfoxStore((state) => state.credentials)
 
@@ -60,29 +85,45 @@ export function useDevices() {
     )
   }
 
-  // API-Modus (Standard)
+  // API-Modus (Standard) - holt von API und speichert automatisch in DB
   return useSWR(
     credentials ? ["devices", credentials] : null,
-    () =>
-      apiFetcher({
+    async () => {
+      const devices = await apiFetcher({
         endpoint: "all/devices",
         email: credentials!.email,
         password: credentials!.password,
-      }),
-    { revalidateOnFocus: false }
+      })
+      // Speichere im Hintergrund in DB (fire-and-forget)
+      if (devices && Array.isArray(devices) && devices.length > 0) {
+        saveDevicesToDb(devices)
+      }
+      
+      return devices
+    },
+    { 
+      revalidateOnFocus: false,
+      refreshInterval: REFRESH_INTERVALS.DEVICES
+    }
   )
 }
 
 export function useCurrentData(deviceId: string | null) {
   const credentials = usePowerfoxStore((state) => state.credentials)
 
-  // DB-Modus
+  // DB-Modus - holt neueste Daten aus DB
   if (USE_DATABASE) {
-    return useSWR(
-      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=current&limit=100` : null,
-      () => dbFetcher(`/api/powerfox/history?deviceId=${deviceId}&type=current&limit=100`),
+    const result = useSWR(
+      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=current&limit=1` : null,
+      dbFetcher,
       { refreshInterval: 30000 }
     )
+    
+    // Transformiere DB-Response zu API-Response Format (nimm neuesten Eintrag)
+    return {
+      ...result,
+      data: result.data?.data?.[0] || null
+    }
   }
 
   // API-Modus (Standard)
@@ -95,20 +136,29 @@ export function useCurrentData(deviceId: string | null) {
         email: credentials!.email,
         password: credentials!.password,
       }),
-    { refreshInterval: 30000 }
+    { 
+      refreshInterval: REFRESH_INTERVALS.CURRENT,
+      revalidateOnFocus: false
+    }
   )
 }
 
 export function useOperatingData(deviceId: string | null) {
   const credentials = usePowerfoxStore((state) => state.credentials)
 
-  // DB-Modus
+  // DB-Modus - holt neuesten Operating Report aus DB
   if (USE_DATABASE) {
-    return useSWR(
-      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=operating&limit=10` : null,
-      () => dbFetcher(`/api/powerfox/history?deviceId=${deviceId}&type=operating&limit=10`),
+    const result = useSWR(
+      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=operating&limit=1` : null,
+      dbFetcher,
       { refreshInterval: 60000 }
     )
+    
+    // Transformiere DB-Response zu API-Response Format (nimm neuesten Eintrag)
+    return {
+      ...result,
+      data: result.data?.data?.[0] || null
+    }
   }
 
   // API-Modus (Standard)
@@ -120,7 +170,10 @@ export function useOperatingData(deviceId: string | null) {
         email: credentials!.email,
         password: credentials!.password,
       }),
-    { refreshInterval: 60000 }
+    { 
+      refreshInterval: REFRESH_INTERVALS.OPERATING,
+      revalidateOnFocus: false
+    }
   )
 }
 
@@ -131,13 +184,19 @@ export function useReportData(
 ) {
   const credentials = usePowerfoxStore((state) => state.credentials)
 
-  // DB-Modus
+  // DB-Modus - holt neuesten Report aus DB
   if (USE_DATABASE) {
-    return useSWR(
-      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=reports&limit=10` : null,
-      () => dbFetcher(`/api/powerfox/history?deviceId=${deviceId}&type=reports&limit=10`),
+    const result = useSWR(
+      deviceId ? `/api/powerfox/history?deviceId=${deviceId}&type=reports&limit=1` : null,
+      dbFetcher,
       { revalidateOnFocus: false }
     )
+    
+    // Transformiere DB-Response zu API-Response Format (nimm neuesten Eintrag)
+    return {
+      ...result,
+      data: result.data?.data?.[0] || null
+    }
   }
 
   // API-Modus (Standard)
@@ -159,6 +218,9 @@ export function useReportData(
         email: credentials!.email,
         password: credentials!.password,
       }),
-    { revalidateOnFocus: false }
+    { 
+      revalidateOnFocus: false,
+      refreshInterval: REFRESH_INTERVALS.REPORT
+    }
   )
 }

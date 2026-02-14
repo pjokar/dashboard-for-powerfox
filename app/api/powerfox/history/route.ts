@@ -5,6 +5,7 @@ import {
   getOperatingReports,
   getReports,
 } from "@/lib/powerfox-db"
+import { currentDataDbToSdk } from "@/lib/mappers"
 
 /**
  * GET /api/powerfox/history
@@ -37,23 +38,28 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case "current":
+        let currentData
         if (startTimestamp && endTimestamp) {
-          data = await getCurrentDataByTimeRange(
+          currentData = await getCurrentDataByTimeRange(
             deviceId,
             parseInt(startTimestamp),
             parseInt(endTimestamp)
           )
         } else {
-          data = await getLatestCurrentData(deviceId, limit)
+          currentData = await getLatestCurrentData(deviceId, limit)
         }
+        // Transformiere DB-Daten zu SDK-Format
+        data = currentData.map(currentDataDbToSdk)
         break
 
       case "operating":
         data = await getOperatingReports(deviceId, limit)
+        // TODO: operatingReportDbToSdk wenn benötigt
         break
 
       case "reports":
         data = await getReports(deviceId, limit)
+        // TODO: reportDbToSdk wenn benötigt
         break
 
       default:

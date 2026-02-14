@@ -8,17 +8,19 @@ import type {
 
 /**
  * Speichert oder aktualisiert ein Device in der Datenbank
+ * Akzeptiert gemappte Daten (DB-Format) - deviceId ist garantiert vorhanden
  */
-export async function saveDevice(device: MyDeviceModel) {
+export async function saveDevice(device: any) {
   if (!device.deviceId) {
-    throw new Error('DeviceId is required');
+    console.error('Device has no deviceId:', device);
+    throw new Error('Device must have a deviceId');
   }
-
+  
   return await prisma.device.upsert({
     where: { deviceId: device.deviceId },
     update: {
-      name: device.name,
-      accountAssociatedSince: device.accountAssociatedSince,
+      name: device.name ?? null,
+      accountAssociatedSince: device.accountAssociatedSince ?? null,
       mainDevice: device.mainDevice ?? false,
       prosumer: device.prosumer ?? false,
       division: device.division ?? 0,
@@ -26,8 +28,8 @@ export async function saveDevice(device: MyDeviceModel) {
     },
     create: {
       deviceId: device.deviceId,
-      name: device.name,
-      accountAssociatedSince: device.accountAssociatedSince,
+      name: device.name ?? null,
+      accountAssociatedSince: device.accountAssociatedSince ?? null,
       mainDevice: device.mainDevice ?? false,
       prosumer: device.prosumer ?? false,
       division: device.division ?? 0,
@@ -37,12 +39,14 @@ export async function saveDevice(device: MyDeviceModel) {
 
 /**
  * Speichert aktuelle Daten (CurrentData) für ein Device
+ * Akzeptiert gemappte Daten (DB-Format) - deviceId ist garantiert vorhanden
  */
-export async function saveCurrentData(data: MyCurrentDataModel) {
+export async function saveCurrentData(data: any) {
   if (!data.deviceId) {
-    throw new Error('DeviceId is required');
+    console.error('CurrentData has no deviceId:', data);
+    throw new Error('CurrentData must have a deviceId');
   }
-
+  
   // Stelle sicher, dass das Device existiert
   await prisma.device.upsert({
     where: { deviceId: data.deviceId },
@@ -59,6 +63,7 @@ export async function saveCurrentData(data: MyCurrentDataModel) {
     data: {
       deviceId: data.deviceId,
       outdated: data.outdated ?? false,
+      unit: data.unit ?? "wh",
       watt: data.watt,
       kiloWattHour: data.kiloWattHour,
       deltaKiloWattHour: data.deltaKiloWattHour,
@@ -80,12 +85,18 @@ export async function saveCurrentData(data: MyCurrentDataModel) {
 
 /**
  * Speichert einen Operating Report mit Values
+ * Das SDK garantiert dass deviceId vorhanden ist
  */
-export async function saveOperatingReport(report: OperatingReportModel) {
+/**
+ * Speichert einen Operating Report (gemappte Daten aus API)
+ * Akzeptiert gemappte Daten (DB-Format) - deviceId ist garantiert vorhanden
+ */
+export async function saveOperatingReport(report: any) {
   if (!report.deviceId) {
-    throw new Error('DeviceId is required');
+    console.error('OperatingReport has no deviceId:', report);
+    throw new Error('OperatingReport must have a deviceId');
   }
-
+  
   // Stelle sicher, dass das Device existiert
   await prisma.device.upsert({
     where: { deviceId: report.deviceId },
@@ -101,50 +112,34 @@ export async function saveOperatingReport(report: OperatingReportModel) {
   return await prisma.operatingReport.create({
     data: {
       deviceId: report.deviceId,
-      max: report.max,
-      min: report.min,
-      avg: report.avg,
+      max: report.max ?? null,
+      min: report.min ?? null,
+      avg: report.avg ?? null,
       values: report.values
         ? {
-            create: report.values.map((v) => ({
-              timestamp: v.timestamp,
-              value: v.value,
-            })),
-          }
-        : undefined,
-      valuesPlus: report.valuesPlus
-        ? {
-            create: report.valuesPlus.map((v) => ({
-              timestamp: v.timestamp,
-              value: v.value,
-            })),
-          }
-        : undefined,
-      valuesMinus: report.valuesMinus
-        ? {
-            create: report.valuesMinus.map((v) => ({
-              timestamp: v.timestamp,
-              value: v.value,
+            create: report.values.map((v: any) => ({
+              timestamp: v.timestamp ?? null,
+              value: v.value ?? v.average ?? null,
             })),
           }
         : undefined,
     },
     include: {
       values: true,
-      valuesPlus: true,
-      valuesMinus: true,
     },
   });
 }
 
 /**
  * Speichert einen vollständigen Report mit allen Summaries
+ * Akzeptiert gemappte Daten (DB-Format) - deviceId ist garantiert vorhanden
  */
-export async function saveReport(report: ReportModel) {
+export async function saveReport(report: any) {
   if (!report.deviceId) {
-    throw new Error('DeviceId is required');
+    console.error('Report has no deviceId:', report);
+    throw new Error('Report must have a deviceId');
   }
-
+  
   // Stelle sicher, dass das Device existiert
   await prisma.device.upsert({
     where: { deviceId: report.deviceId },
@@ -183,11 +178,10 @@ export async function saveReport(report: ReportModel) {
       data: {
         reportId: createdReport.id,
         sumCurrency: report.heat.sumCurrency,
-        startTime: report.heat.startTime,
-        startTimeCurrency: report.heat.startTimeCurrency,
-        sum: report.heat.sum,
-        max: report.heat.max,
-        maxCurrency: report.heat.maxCurrency,
+        sumCubicMeter: report.heat.sumCubicMeter,
+        maxCubicMeter: report.heat.maxCubicMeter,
+        sumKiloWattHour: report.heat.sumKiloWattHour,
+        maxKiloWattHour: report.heat.maxKiloWattHour,
         meterReadings: report.heat.meterReadings
           ? {
               create: report.heat.meterReadings.map((mr) => ({
@@ -199,9 +193,27 @@ export async function saveReport(report: ReportModel) {
         reportValues: report.heat.reportValues
           ? {
               create: report.heat.reportValues.map((rv) => ({
+                deviceId: rv.deviceId,
                 timestamp: rv.timestamp,
-                value: rv.value,
-                type: rv.type,
+                complete: rv.complete ?? false,
+                delta: rv.delta,
+                totalDelta: rv.totalDelta,
+                totalDeltaCurrency: rv.totalDeltaCurrency,
+                deltaHT: rv.deltaHT,
+                deltaNT: rv.deltaNT,
+                deltaCurrency: rv.deltaCurrency,
+                consumption: rv.consumption,
+                consumptionKWh: rv.consumptionKWh,
+                amountOfValuesAdded: rv.amountOfValuesAdded,
+                deltaKiloWattHour: rv.deltaKiloWattHour,
+                deltaCubicMeter: rv.deltaCubicMeter,
+                deltaCubicMeterCold: rv.deltaCubicMeterCold,
+                deltaCubicMeterWarm: rv.deltaCubicMeterWarm,
+                deltaCurrencyCold: rv.deltaCurrencyCold,
+                deltaCurrencyWarm: rv.deltaCurrencyWarm,
+                currentConsumption: rv.currentConsumption,
+                currentConsumptionKwh: rv.currentConsumptionKwh,
+                valuesType: rv.valuesType,
               })),
             }
           : undefined,
@@ -215,11 +227,23 @@ export async function saveReport(report: ReportModel) {
       data: {
         reportId: createdReport.id,
         sumCurrency: report.gas.sumCurrency,
-        startTime: report.gas.startTime,
-        startTimeCurrency: report.gas.startTimeCurrency,
+        totalDelta: report.gas.totalDelta,
         sum: report.gas.sum,
+        totalDeltaCurrency: report.gas.totalDeltaCurrency,
+        currentConsumptionKwh: report.gas.currentConsumptionKwh,
+        currentConsumption: report.gas.currentConsumption,
+        consumptionKWh: report.gas.consumptionKWh,
+        consumption: report.gas.consumption,
         max: report.gas.max,
         maxCurrency: report.gas.maxCurrency,
+        maxConsumption: report.gas.maxConsumption,
+        maxConsumptionKWh: report.gas.maxConsumptionKWh,
+        min: report.gas.min,
+        minConsumption: report.gas.minConsumption,
+        minConsumptionKWh: report.gas.minConsumptionKWh,
+        avgDelta: report.gas.avgDelta,
+        avgConsumption: report.gas.avgConsumption,
+        avgConsumptionKWh: report.gas.avgConsumptionKWh,
         meterReadings: report.gas.meterReadings
           ? {
               create: report.gas.meterReadings.map((mr) => ({
@@ -231,9 +255,27 @@ export async function saveReport(report: ReportModel) {
         reportValues: report.gas.reportValues
           ? {
               create: report.gas.reportValues.map((rv) => ({
+                deviceId: rv.deviceId,
                 timestamp: rv.timestamp,
-                value: rv.value,
-                type: rv.type,
+                complete: rv.complete ?? false,
+                delta: rv.delta,
+                totalDelta: rv.totalDelta,
+                totalDeltaCurrency: rv.totalDeltaCurrency,
+                deltaHT: rv.deltaHT,
+                deltaNT: rv.deltaNT,
+                deltaCurrency: rv.deltaCurrency,
+                consumption: rv.consumption,
+                consumptionKWh: rv.consumptionKWh,
+                amountOfValuesAdded: rv.amountOfValuesAdded,
+                deltaKiloWattHour: rv.deltaKiloWattHour,
+                deltaCubicMeter: rv.deltaCubicMeter,
+                deltaCubicMeterCold: rv.deltaCubicMeterCold,
+                deltaCubicMeterWarm: rv.deltaCubicMeterWarm,
+                deltaCurrencyCold: rv.deltaCurrencyCold,
+                deltaCurrencyWarm: rv.deltaCurrencyWarm,
+                currentConsumption: rv.currentConsumption,
+                currentConsumptionKwh: rv.currentConsumptionKwh,
+                valuesType: rv.valuesType,
               })),
             }
           : undefined,
@@ -247,11 +289,12 @@ export async function saveReport(report: ReportModel) {
       data: {
         reportId: createdReport.id,
         sumCurrency: report.water.sumCurrency,
-        startTime: report.water.startTime,
-        startTimeCurrency: report.water.startTimeCurrency,
-        sum: report.water.sum,
-        max: report.water.max,
-        maxCurrency: report.water.maxCurrency,
+        sumCurrencyCold: report.water.sumCurrencyCold,
+        sumCubicMeterCold: report.water.sumCubicMeterCold,
+        maxCubicMeterCold: report.water.maxCubicMeterCold,
+        sumCurrencyWarm: report.water.sumCurrencyWarm,
+        sumCubicMeterWarm: report.water.sumCubicMeterWarm,
+        maxCubicMeterWarm: report.water.maxCubicMeterWarm,
         meterReadings: report.water.meterReadings
           ? {
               create: report.water.meterReadings.map((mr) => ({
@@ -263,9 +306,27 @@ export async function saveReport(report: ReportModel) {
         reportValues: report.water.reportValues
           ? {
               create: report.water.reportValues.map((rv) => ({
+                deviceId: rv.deviceId,
                 timestamp: rv.timestamp,
-                value: rv.value,
-                type: rv.type,
+                complete: rv.complete ?? false,
+                delta: rv.delta,
+                totalDelta: rv.totalDelta,
+                totalDeltaCurrency: rv.totalDeltaCurrency,
+                deltaHT: rv.deltaHT,
+                deltaNT: rv.deltaNT,
+                deltaCurrency: rv.deltaCurrency,
+                consumption: rv.consumption,
+                consumptionKWh: rv.consumptionKWh,
+                amountOfValuesAdded: rv.amountOfValuesAdded,
+                deltaKiloWattHour: rv.deltaKiloWattHour,
+                deltaCubicMeter: rv.deltaCubicMeter,
+                deltaCubicMeterCold: rv.deltaCubicMeterCold,
+                deltaCubicMeterWarm: rv.deltaCubicMeterWarm,
+                deltaCurrencyCold: rv.deltaCurrencyCold,
+                deltaCurrencyWarm: rv.deltaCurrencyWarm,
+                currentConsumption: rv.currentConsumption,
+                currentConsumptionKwh: rv.currentConsumptionKwh,
+                valuesType: rv.valuesType,
               })),
             }
           : undefined,
@@ -295,9 +356,17 @@ async function createPowerSummary(
   summaryType: 'consumption' | 'ownConsumption' | 'feedIn' | 'generation',
   summary: any
 ) {
+  // Bestimme das richtige Foreign Key Feld basierend auf dem summaryType
+  const relationField: Record<string, string> = {
+    consumption: 'reportConsumptionId',
+    ownConsumption: 'reportOwnConsumptionId',
+    feedIn: 'reportFeedInId',
+    generation: 'reportGenerationId',
+  };
+
   return await prisma.reportSummaryPower.create({
     data: {
-      reportId,
+      [relationField[summaryType]]: reportId,
       summaryType,
       sumCurrency: summary.sumCurrency,
       startTime: summary.startTime,
@@ -316,9 +385,27 @@ async function createPowerSummary(
       reportValues: summary.reportValues
         ? {
             create: summary.reportValues.map((rv: any) => ({
+              deviceId: rv.deviceId,
               timestamp: rv.timestamp,
-              value: rv.value,
-              type: rv.type,
+              complete: rv.complete ?? false,
+              delta: rv.delta,
+              totalDelta: rv.totalDelta,
+              totalDeltaCurrency: rv.totalDeltaCurrency,
+              deltaHT: rv.deltaHT,
+              deltaNT: rv.deltaNT,
+              deltaCurrency: rv.deltaCurrency,
+              consumption: rv.consumption,
+              consumptionKWh: rv.consumptionKWh,
+              amountOfValuesAdded: rv.amountOfValuesAdded,
+              deltaKiloWattHour: rv.deltaKiloWattHour,
+              deltaCubicMeter: rv.deltaCubicMeter,
+              deltaCubicMeterCold: rv.deltaCubicMeterCold,
+              deltaCubicMeterWarm: rv.deltaCubicMeterWarm,
+              deltaCurrencyCold: rv.deltaCurrencyCold,
+              deltaCurrencyWarm: rv.deltaCurrencyWarm,
+              currentConsumption: rv.currentConsumption,
+              currentConsumptionKwh: rv.currentConsumptionKwh,
+              valuesType: rv.valuesType,
             })),
           }
         : undefined,
@@ -425,6 +512,85 @@ export async function deleteOldCurrentData(daysToKeep = 30) {
     where: {
       timestamp: {
         lt: cutoffTimestamp,
+      },
+    },
+  });
+}
+
+// ============================================
+// API Logging Funktionen
+// ============================================
+
+/**
+ * Speichert einen API-Aufruf Log
+ */
+export async function logApiCall(data: {
+  endpoint: string;
+  method: string;
+  params?: Record<string, any>;
+  statusCode: number;
+  success: boolean;
+  responseData?: any;
+  errorMessage?: string;
+  duration?: number;
+}) {
+  return await prisma.apiLog.create({
+    data: {
+      endpoint: data.endpoint,
+      method: data.method,
+      params: data.params ? JSON.stringify(data.params) : null,
+      statusCode: data.statusCode,
+      success: data.success,
+      responseData: data.responseData ? JSON.stringify(data.responseData) : null,
+      errorMessage: data.errorMessage,
+      duration: data.duration,
+    },
+  });
+}
+
+/**
+ * Holt die neuesten API-Logs
+ */
+export async function getApiLogs(limit = 100) {
+  return await prisma.apiLog.findMany({
+    orderBy: { timestamp: 'desc' },
+    take: limit,
+  });
+}
+
+/**
+ * Holt API-Logs für einen bestimmten Endpoint
+ */
+export async function getApiLogsByEndpoint(endpoint: string, limit = 50) {
+  return await prisma.apiLog.findMany({
+    where: { endpoint },
+    orderBy: { timestamp: 'desc' },
+    take: limit,
+  });
+}
+
+/**
+ * Holt fehlgeschlagene API-Logs
+ */
+export async function getFailedApiLogs(limit = 50) {
+  return await prisma.apiLog.findMany({
+    where: { success: false },
+    orderBy: { timestamp: 'desc' },
+    take: limit,
+  });
+}
+
+/**
+ * Löscht alte API-Logs (z.B. älter als 7 Tage)
+ */
+export async function deleteOldApiLogs(daysToKeep = 7) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  return await prisma.apiLog.deleteMany({
+    where: {
+      timestamp: {
+        lt: cutoffDate,
       },
     },
   });

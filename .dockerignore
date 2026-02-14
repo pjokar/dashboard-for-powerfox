@@ -1,0 +1,31 @@
+# Dependencies – install in container from package.json
+node_modules
+.pnpm-store
+
+# Build output
+.next
+out
+build
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.md
+!README.md
+
+# Env and local files
+.env*
+*.local
+
+# Debug and logs
+npm-debug.log*
+.pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Optional: keep DB/Prisma if you want to ship schema (data usually mounted at runtime)
+# db/*.db
+# db/*.db-journal

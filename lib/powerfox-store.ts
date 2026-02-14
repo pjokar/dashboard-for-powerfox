@@ -2,8 +2,11 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
 interface PowerfoxCredentials {
+  /**
+   * Nur die Email wird im Client-Store gehalten/persistiert.
+   * Das Passwort liegt ausschließlich im HttpOnly-Cookie.
+   */
   email: string
-  password: string
 }
 
 interface PowerfoxStore {
@@ -21,7 +24,7 @@ export const usePowerfoxStore = create<PowerfoxStore>()(
       clearCredentials: () => set({ credentials: null }),
       isConfigured: () => {
         const creds = get().credentials
-        return !!(creds?.email && creds?.password)
+        return !!creds?.email
       },
     }),
     {
@@ -29,3 +32,13 @@ export const usePowerfoxStore = create<PowerfoxStore>()(
     }
   )
 )
+
+/** Bei 401 oder ungültigem Cookie: Store leeren und zur Login-Seite (Locale beibehalten). */
+export function handleSessionInvalid() {
+  usePowerfoxStore.getState().clearCredentials()
+  if (typeof window !== "undefined") {
+    const seg = window.location.pathname.split("/")[1]
+    const locale = seg === "de" || seg === "en" ? seg : "de"
+    window.location.href = `/${locale}/login`
+  }
+}
