@@ -172,6 +172,7 @@ export class MyApi extends runtime.BaseAPI {
         urlPath = urlPath.replace(`{${"id"}}`, encodeURIComponent(String(requestParameters['id'])));
         urlPath = urlPath.replace(`{${"version"}}`, encodeURIComponent(String(requestParameters['version'])));
 
+
         const response = await this.request({
             path: urlPath,
             method: 'GET',
@@ -188,7 +189,8 @@ export class MyApi extends runtime.BaseAPI {
      */
     async apiVersionMyIdDevicesGet(requestParameters: ApiVersionMyIdDevicesGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<MyDeviceModel>> {
         const response = await this.apiVersionMyIdDevicesGetRaw(requestParameters, initOverrides);
-        return await response.value();
+        const value = await response.value();
+        return value;
     }
 
     /**

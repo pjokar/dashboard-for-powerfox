@@ -11,44 +11,44 @@ import {
   CartesianGrid,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useOperatingData } from "@/hooks/use-powerfox"
+import { usePowerfoxOperatingReport } from "@/hooks/use-powerfox-api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertCircle, Activity } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface PowerChartProps {
   deviceId: string | null
 }
 
 export function PowerChart({ deviceId }: PowerChartProps) {
-  const { data, error, isLoading } = useOperatingData(deviceId)
+  const { data, error, isLoading } = usePowerfoxOperatingReport(deviceId)
+  const t = useTranslations("powerChart")
+  const tCommon = useTranslations("common")
 
+  // Daten sind bereits gemappt (camelCase von API-Schicht)
   const chartData = useMemo(() => {
-    if (!data?.Data) return []
+    if (!data?.values || !Array.isArray(data.values)) return []
 
-    return data.Data.map(
-      (item: { Timestamp: number; Average: number; Min: number; Max: number }) => ({
-        time: new Date(item.Timestamp * 1000).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        power: item.Average,
-        min: item.Min,
-        max: item.Max,
-      })
-    )
+    return data.values.map((item: any) => ({
+      time: new Date((item.timestamp || 0) * 1000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      power: item.average || item.value || 0,
+      min: item.min || 0,
+      max: item.max || 0,
+    }))
   }, [data])
 
   if (!deviceId) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Power (Last 60 Minutes)
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <Activity className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No device selected</p>
+          <p className="text-sm text-muted-foreground">{tCommon("noDeviceSelected")}</p>
         </CardContent>
       </Card>
     )
@@ -58,9 +58,7 @@ export function PowerChart({ deviceId }: PowerChartProps) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Power (Last 60 Minutes)
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <Activity className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
@@ -74,9 +72,7 @@ export function PowerChart({ deviceId }: PowerChartProps) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Power (Last 60 Minutes)
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <AlertCircle className="h-4 w-4 text-destructive" />
         </CardHeader>
         <CardContent>
@@ -89,9 +85,7 @@ export function PowerChart({ deviceId }: PowerChartProps) {
   return (
     <Card className="col-span-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
-          Power (Last 60 Minutes)
-        </CardTitle>
+        <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
         <Activity className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>

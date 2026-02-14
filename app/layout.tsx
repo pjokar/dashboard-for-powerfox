@@ -8,8 +8,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Powerfox Dashboard',
-  description: 'Monitor your energy consumption with Powerfox',
+  title: 'Dashboard für Powerfox',
+  description: 'Energieverbrauch mit Powerfox überwachen – ohne Speicherung deiner Zugangsdaten.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="de">
       <body className={`font-sans antialiased`}>
         {children}
         <Analytics />

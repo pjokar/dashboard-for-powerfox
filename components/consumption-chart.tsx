@@ -19,9 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useReportData } from "@/hooks/use-powerfox"
+import { usePowerfoxReport } from "@/hooks/use-powerfox-api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertCircle, BarChart3 } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface ConsumptionChartProps {
   deviceId: string | null
@@ -31,6 +32,8 @@ type Period = "24h" | "day" | "month" | "year"
 
 export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
   const [period, setPeriod] = useState<Period>("24h")
+  const t = useTranslations("consumptionChart")
+  const tCommon = useTranslations("common")
 
   const now = new Date()
   const dateParams = useMemo(() => {
@@ -50,64 +53,54 @@ export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
     }
   }, [period, now.getFullYear(), now.getMonth(), now.getDate()])
 
-  const { data, error, isLoading } = useReportData(deviceId, period, dateParams)
+  const { data, error, isLoading } = usePowerfoxReport(deviceId, dateParams)
 
+  // Daten sind bereits gemappt (camelCase von API-Schicht)
   const chartData = useMemo(() => {
-    if (!data?.Data) return []
+    if (!data?.values || !Array.isArray(data.values)) return []
 
-    return data.Data.map(
-      (item: {
-        Timestamp?: number
-        Date?: string
-        A_Plus?: number
-        A_Minus?: number
-        Consumption?: number
-        FeedIn?: number
-      }) => {
-        let label = ""
-        if (item.Timestamp) {
-          const date = new Date(item.Timestamp * 1000)
-          if (period === "24h" || period === "day") {
-            label = date.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          } else if (period === "month") {
-            label = date.toLocaleDateString([], { day: "numeric" })
-          } else {
-            label = date.toLocaleDateString([], { month: "short" })
-          }
-        } else if (item.Date) {
-          label = item.Date
+    return data.values.map((item: any) => {
+      let label = ""
+      if (item.timestamp) {
+        const date = new Date(item.timestamp * 1000)
+        if (period === "24h" || period === "day") {
+          label = date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        } else if (period === "month") {
+          label = date.toLocaleDateString([], { day: "numeric" })
+        } else {
+          label = date.toLocaleDateString([], { month: "short" })
         }
-
-        return {
-          label,
-          consumption: item.A_Plus || item.Consumption || 0,
-          feedIn: item.A_Minus || item.FeedIn || 0,
-        }
+      } else if (item.date) {
+        label = item.date
       }
-    )
+
+      return {
+        label,
+        consumption: item.consumption || item.aPlus || 0,
+        feedIn: item.feedIn || item.aMinus || 0,
+      }
+    })
   }, [data, period])
 
   const periodLabels: Record<Period, string> = {
-    "24h": "Last 24 Hours",
-    day: "Today (Hourly)",
-    month: "This Month (Daily)",
-    year: "This Year (Monthly)",
+    "24h": t("period24h"),
+    day: t("periodDay"),
+    month: t("periodMonth"),
+    year: t("periodYear"),
   }
 
   if (!deviceId) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Energy Consumption
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No device selected</p>
+          <p className="text-sm text-muted-foreground">{tCommon("noDeviceSelected")}</p>
         </CardContent>
       </Card>
     )
@@ -117,9 +110,7 @@ export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Energy Consumption
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
@@ -133,9 +124,7 @@ export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
     return (
       <Card className="col-span-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Energy Consumption
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <AlertCircle className="h-4 w-4 text-destructive" />
         </CardHeader>
         <CardContent>
@@ -148,16 +137,16 @@ export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
   return (
     <Card className="col-span-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Energy Consumption</CardTitle>
+        <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
         <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="24h">Last 24 Hours</SelectItem>
-            <SelectItem value="day">Today (Hourly)</SelectItem>
-            <SelectItem value="month">This Month</SelectItem>
-            <SelectItem value="year">This Year</SelectItem>
+            <SelectItem value="24h">{t("period24h")}</SelectItem>
+            <SelectItem value="day">{t("periodDay")}</SelectItem>
+            <SelectItem value="month">{t("periodMonth")}</SelectItem>
+            <SelectItem value="year">{t("periodYear")}</SelectItem>
           </SelectContent>
         </Select>
       </CardHeader>
@@ -197,12 +186,12 @@ export function ConsumptionChart({ deviceId }: ConsumptionChartProps) {
                 labelStyle={{ color: "oklch(0.6 0 0)" }}
                 formatter={(value: number, name: string) => [
                   `${value.toFixed(2)} ${period === "24h" || period === "day" ? "Wh" : "kWh"}`,
-                  name === "consumption" ? "Consumption" : "Feed-in",
+                  name === "consumption" ? t("consumption") : t("feedIn"),
                 ]}
               />
               <Legend
                 formatter={(value) =>
-                  value === "consumption" ? "Consumption" : "Feed-in"
+                  value === "consumption" ? t("consumption") : t("feedIn")
                 }
               />
               <Bar

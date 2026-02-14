@@ -23,6 +23,10 @@ model Device {
   currentData             CurrentData[]
   operatingReports        OperatingReport[]
   reports                 Report[]
+  monthlyReportValues     MonthlyReportValue[]
+  dailyReportValues       DailyReportValue[]
+  hourlyReportValues      HourlyReportValue[]
+  quarterHourlyReportValues QuarterHourlyReportValue[]
   
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
@@ -37,6 +41,7 @@ model CurrentData {
   device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
   
   outdated            Boolean   @default(false)
+  unit                String    @default("wh")  // "wh" oder "kwh"
   watt                Float?
   kiloWattHour        Float?
   deltaKiloWattHour   Float?
@@ -123,7 +128,6 @@ model Report {
 // Report Summary Power - Strom-Zusammenfassung
 model ReportSummaryPower {
   id                      String                @id @default(cuid())
-  reportId                String                @unique
   summaryType             String                // "consumption", "ownConsumption", "feedIn", "generation"
   
   sumCurrency             Float?
@@ -133,18 +137,23 @@ model ReportSummaryPower {
   max                     Float?
   maxCurrency             Float?
   
-  reportConsumption       Report?               @relation("Consumption", fields: [reportId], references: [id], onDelete: Cascade)
-  reportOwnConsumption    Report?               @relation("OwnConsumption", fields: [reportId], references: [id], onDelete: Cascade)
-  reportFeedIn            Report?               @relation("FeedIn", fields: [reportId], references: [id], onDelete: Cascade)
-  reportGeneration        Report?               @relation("Generation", fields: [reportId], references: [id], onDelete: Cascade)
+  reportConsumptionId     String?               @unique
+  reportConsumption       Report?               @relation("Consumption", fields: [reportConsumptionId], references: [id], onDelete: Cascade)
+  
+  reportOwnConsumptionId  String?               @unique
+  reportOwnConsumption    Report?               @relation("OwnConsumption", fields: [reportOwnConsumptionId], references: [id], onDelete: Cascade)
+  
+  reportFeedInId          String?               @unique
+  reportFeedIn            Report?               @relation("FeedIn", fields: [reportFeedInId], references: [id], onDelete: Cascade)
+  
+  reportGenerationId      String?               @unique
+  reportGeneration        Report?               @relation("Generation", fields: [reportGenerationId], references: [id], onDelete: Cascade)
   
   meterReadings           ReportMeterReading[]
   reportValues            ReportValue[]
   
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
-  
-  @@index([reportId])
 }
 
 // Report Summary Heat - Wärme-Zusammenfassung
@@ -154,11 +163,10 @@ model ReportSummaryHeat {
   report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
   
   sumCurrency             Float?
-  startTime               Int?
-  startTimeCurrency       Float?
-  sum                     Float?
-  max                     Float?
-  maxCurrency             Float?
+  sumCubicMeter           Float?
+  maxCubicMeter           Float?
+  sumKiloWattHour         Float?
+  maxKiloWattHour         Float?
   
   meterReadings           ReportMeterReading[]
   reportValues            ReportValue[]
@@ -176,11 +184,23 @@ model ReportSummaryGas {
   report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
   
   sumCurrency             Float?
-  startTime               Int?
-  startTimeCurrency       Float?
+  totalDelta              Float?
   sum                     Float?
+  totalDeltaCurrency      Float?
+  currentConsumptionKwh   Float?
+  currentConsumption      Float?
+  consumptionKWh          Float?
+  consumption             Float?
   max                     Float?
   maxCurrency             Float?
+  maxConsumption          Float?
+  maxConsumptionKWh       Float?
+  min                     Float?
+  minConsumption          Float?
+  minConsumptionKWh       Float?
+  avgDelta                Float?
+  avgConsumption          Float?
+  avgConsumptionKWh       Float?
   
   meterReadings           ReportMeterReading[]
   reportValues            ReportValue[]
@@ -198,11 +218,12 @@ model ReportSummaryWater {
   report                  Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
   
   sumCurrency             Float?
-  startTime               Int?
-  startTimeCurrency       Float?
-  sum                     Float?
-  max                     Float?
-  maxCurrency             Float?
+  sumCurrencyCold         Float?
+  sumCubicMeterCold       Float?
+  maxCubicMeterCold       Float?
+  sumCurrencyWarm         Float?
+  sumCubicMeterWarm       Float?
+  maxCubicMeterWarm       Float?
   
   meterReadings           ReportMeterReading[]
   reportValues            ReportValue[]
@@ -237,9 +258,27 @@ model ReportMeterReading {
 // Report Value - Berichtswerte
 model ReportValue {
   id                      String                @id @default(cuid())
+  deviceId                String?
   timestamp               Int?
-  value                   Float?
-  type                    Int?                  // ValuesType enum as Int
+  complete                Boolean               @default(false)
+  delta                   Float?
+  totalDelta              Float?
+  totalDeltaCurrency      Float?
+  deltaHT                 Float?
+  deltaNT                 Float?
+  deltaCurrency           Float?
+  consumption             Float?
+  consumptionKWh          Float?
+  amountOfValuesAdded     Float?
+  deltaKiloWattHour       Float?
+  deltaCubicMeter         Float?
+  deltaCubicMeterCold     Float?
+  deltaCubicMeterWarm     Float?
+  deltaCurrencyCold       Float?
+  deltaCurrencyWarm       Float?
+  currentConsumption      Float?
+  currentConsumptionKwh   Float?
+  valuesType              Int?                  // ValuesType enum as Int
   
   reportSummaryPowerId    String?
   reportSummaryPower      ReportSummaryPower?   @relation(fields: [reportSummaryPowerId], references: [id], onDelete: Cascade)
@@ -255,5 +294,131 @@ model ReportValue {
   
   createdAt               DateTime              @default(now())
   
+  @@index([timestamp])
+  @@index([deviceId])
+}
+
+// API Log Model - Logging aller API-Aufrufe
+model ApiLog {
+  id                  String    @id @default(cuid())
+  
+  // Request Information
+  endpoint            String    // z.B. "all/devices", "{deviceId}/current"
+  method              String    // GET, POST, etc.
+  params              String?   // JSON string der Parameter
+  
+  // Response Information
+  statusCode          Int
+  success             Boolean   @default(true)
+  responseData        String?   // JSON string der Response
+  errorMessage        String?
+  
+  // Metadata
+  duration            Int?      // Dauer in Millisekunden
+  timestamp           DateTime  @default(now())
+  
+  @@index([endpoint])
+  @@index([timestamp])
+  @@index([success])
+}
+
+// Monthly Report Value - Monatswerte (nur Jahr)
+// Werte sind in kWh (nicht Watt)
+model MonthlyReportValue {
+  id                  String    @id @default(cuid())
+  deviceId            String
+  device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  year                Int
+  month               Int       // 1-12
+  timestamp           Int       // Unix timestamp
+  
+  kWh                 Float?    // Wert in kWh
+  aPlus               Float?    // Wert in kWh
+  aMinus              Float?    // Wert in kWh
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@unique([deviceId, year, month])
+  @@index([deviceId])
+  @@index([year, month])
+  @@index([timestamp])
+}
+
+// Daily Report Value - Tageswerte (Jahr + Monat)
+// Werte sind in kWh (nicht Watt)
+model DailyReportValue {
+  id                  String    @id @default(cuid())
+  deviceId            String
+  device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  year                Int
+  month               Int       // 1-12
+  day                 Int       // 1-31
+  timestamp           Int       // Unix timestamp
+  
+  kWh                 Float?    // Wert in kWh
+  aPlus               Float?    // Wert in kWh
+  aMinus              Float?    // Wert in kWh
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@unique([deviceId, year, month, day])
+  @@index([deviceId])
+  @@index([year, month, day])
+  @@index([timestamp])
+}
+
+// Hourly Report Value - Stundenwerte (Jahr + Monat + Tag)
+// Werte sind in kWh (nicht Watt)
+model HourlyReportValue {
+  id                  String    @id @default(cuid())
+  deviceId            String
+  device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  year                Int
+  month               Int       // 1-12
+  day                 Int       // 1-31
+  hour                Int       // 0-23
+  timestamp           Int       // Unix timestamp
+  
+  kWh                 Float?    // Wert in kWh
+  aPlus               Float?    // Wert in kWh
+  aMinus              Float?    // Wert in kWh
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@unique([deviceId, year, month, day, hour])
+  @@index([deviceId])
+  @@index([year, month, day, hour])
+  @@index([timestamp])
+}
+
+// Quarter Hourly Report Value - Viertelstundenwerte (Jahr + Monat + Tag + fromHour)
+model QuarterHourlyReportValue {
+  id                  String    @id @default(cuid())
+  deviceId            String
+  device              Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  year                Int
+  month               Int       // 1-12
+  day                 Int       // 1-31
+  hour                Int       // 0-23
+  minute              Int       // 0, 15, 30, 45
+  timestamp           Int       // Unix timestamp
+  
+  watt                Float?
+  aPlus               Float?
+  aMinus              Float?
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@unique([deviceId, year, month, day, hour, minute])
+  @@index([deviceId])
+  @@index([year, month, day, hour, minute])
   @@index([timestamp])
 }

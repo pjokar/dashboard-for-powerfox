@@ -2,25 +2,28 @@
 
 import { Gauge, ArrowDown, ArrowUp, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useCurrentData } from "@/hooks/use-powerfox"
+import { usePowerfoxCurrentData } from "@/hooks/use-powerfox-api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useTranslations } from "next-intl"
 
 interface MeterReadingCardProps {
   deviceId: string | null
 }
 
 export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
-  const { data, error, isLoading } = useCurrentData(deviceId)
+  const { data, error, isLoading } = usePowerfoxCurrentData(deviceId, 'kwh')
+  const t = useTranslations("meterReadingCard")
+  const tCommon = useTranslations("common")
 
   if (!deviceId) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Meter Readings</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <Gauge className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No device selected</p>
+          <p className="text-sm text-muted-foreground">{tCommon("noDeviceSelected")}</p>
         </CardContent>
       </Card>
     )
@@ -30,7 +33,7 @@ export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Meter Readings</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <Gauge className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent className="space-y-3">
@@ -45,7 +48,7 @@ export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Meter Readings</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
           <AlertCircle className="h-4 w-4 text-destructive" />
         </CardHeader>
         <CardContent>
@@ -55,13 +58,14 @@ export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
     )
   }
 
-  const consumption = data?.A_Plus || 0
-  const feedIn = data?.A_Minus || 0
+  // Daten sind bereits gemappt (camelCase von API-Schicht)
+  const consumption = data?.aPlus || 0
+  const feedIn = data?.aMinus || 0
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Meter Readings</CardTitle>
+        <CardTitle className="text-sm font-medium">{t("title")}</CardTitle>
         <Gauge className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent className="space-y-3">
@@ -75,7 +79,7 @@ export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
               })}{" "}
               kWh
             </p>
-            <p className="text-xs text-muted-foreground">Consumption</p>
+            <p className="text-xs text-muted-foreground">{t("consumption")}</p>
           </div>
         </div>
         {feedIn > 0 && (
@@ -89,7 +93,7 @@ export function MeterReadingCard({ deviceId }: MeterReadingCardProps) {
                 })}{" "}
                 kWh
               </p>
-              <p className="text-xs text-muted-foreground">Feed-in</p>
+              <p className="text-xs text-muted-foreground">{t("feedIn")}</p>
             </div>
           </div>
         )}
